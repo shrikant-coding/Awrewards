@@ -1,0 +1,60 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if the authenticated user is an admin
+    function isAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // Users collection: users can read/write their own data, admins can read all
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == userId;
+    }
+
+    // Codes collection: users can read only available codes (not claimed by them), admins can read/write all
+    match /codes/{codeId} {
+      allow read: if (request.auth != null && !exists(/databases/$(database)/documents/claimedCodes/$(request.auth.uid)/$(codeId))) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ClaimedCodes collection: users can read their own claimed codes only
+    match /claimedCodes/{userId}/{codeId} {
+      allow read: if request.auth.uid == userId;
+      allow write: if request.auth.uid == userId;
+    }
+
+    // DailyPuzzles collection: all can read, admins can write
+    match /dailyPuzzles/{puzzleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // UserProgress collection: users can read/write their own progress only
+    match /userProgress/{userId} {
+      allow read, write: if userId.matches(request.auth.uid + '_.*');
+    }
+
+    // Achievements collection: all can read, admins can write
+    match /achievements/{achievementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Transactions collection: users can read/write their own transactions, admins can read all
+    match /transactions/{transactionId} {
+      allow read: if request.auth.uid == resource.data.user_id || isAdmin();
+      allow write: if request.auth.uid == resource.data.user_id || isAdmin();
+    }
+
+    // Rewards collection: all can read, admins can write
+    match /rewards/{rewardId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+  }
+}
